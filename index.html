@@ -86,6 +86,8 @@
   .tarjeta.t-asistentes .valor{color:var(--verde)}
   .tarjeta.t-ausentes{border-left-color:var(--rojo)}
   .tarjeta.t-ausentes .valor{color:var(--rojo)}
+  .tarjeta.t-pendientes{border-left-color:var(--gris)}
+  .tarjeta.t-pendientes .valor{color:var(--texto-suave)}
 
   /* ===== Cuerpo: tabla escuelas + mapa ===== */
   .cuerpo{flex:1;display:flex;min-height:0}
@@ -144,6 +146,7 @@
   .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10.5px;font-weight:700}
   .badge.si{background:var(--verde-suave);color:var(--verde)}
   .badge.no{background:var(--rojo-suave);color:var(--rojo)}
+  .badge.pend{background:var(--gris-suave);color:var(--texto-suave)}
 
   /* ===== Popup / aviso / leyenda ===== */
   .popup-nombre{font-weight:700;font-size:13px;margin-bottom:2px}
@@ -210,6 +213,10 @@
     <div class="valor" id="numAusentes">–</div>
     <div class="etiqueta">Niños ausentes</div>
   </div>
+  <div class="tarjeta t-pendientes" id="cardPendientes" data-f="pendientes">
+    <div class="valor" id="numPendientes">–</div>
+    <div class="etiqueta">Escuelas pendientes</div>
+  </div>
 </div>
 
 <div class="cuerpo">
@@ -258,17 +265,17 @@ function urlsGviz(hoja){
 
 /* ================= ESTADO ================= */
 let escuelas = [];        // {codigo, nombre, distrito, lat, lng}
-let estudiantes = [];     // {codigo, escuela, nie, nombre, seccion, fecha, turno, asistio}
+let estudiantes = [];     // {codigo, escuela, nie, nombre, seccion, fecha, turno, registrado, asistio}
 let fechasDisponibles = [];
 let turnosDisponibles = [];
 let fechaSel = "";        // "" = ninguna fecha seleccionada (todo gris salvo asistencia)
 let turnoSel = "TODOS";
-let filtroTarjeta = "todas"; // todas | asistentes | ausentes
+let filtroTarjeta = "todas"; // todas | asistentes | ausentes | pendientes
 let busquedaEsc = "";
 let busquedaEst = "";
 let temporizador = null;
 let marcadores = {};
-let estadoEsc = {};       // codigo -> {color, asistentes, ausentes, total, reporto}
+let estadoEsc = {};       // codigo -> {color, presentes, ausentes, pendientes, registrados, total, reporto, pendiente}
 let ultimoError = null;
 
 /* ================= MAPA ================= */
@@ -284,8 +291,8 @@ leyenda.onAdd = function(){
   const div = L.DomUtil.create("div","leyenda");
   div.innerHTML =
     '<span class="pt" style="background:#16a34a"></span> Tomó asistencia<br>' +
-    '<span class="pt" style="background:#dc2626"></span> Sin tomar (en la fecha)<br>' +
-    '<span class="pt" style="background:#9aa7b4"></span> Otra fecha / sin selección';
+    '<span class="pt" style="background:#dc2626"></span> Pendiente (en la fecha)<br>' +
+    '<span class="pt" style="background:#9aa7b4"></span> Otra fecha / sin reportar';
   return div;
 };
 leyenda.addTo(mapa);
@@ -307,6 +314,10 @@ function fechaISO(v, f){
 function esUno(v){
   const n = normalizar(v);
   return n === "1" || n === "1.0" || n === "si" || n === "sí" || n === "true";
+}
+// ¿La celda ASISTENCIA tiene algún valor? (registrada = no vacía). Ojo: 0 cuenta como valor.
+function tieneValor(v){
+  return v !== null && v !== undefined && String(v).trim() !== "";
 }
 function indiceCol(cols, candidatos, porDefecto){
   for(const cand of candidatos){ const i = cols.indexOf(cand); if(i >= 0) return i; }
@@ -441,13 +452,15 @@ function armarEst(codigoV, escuelaV, nieV, nombreV, seccionV, fechaV, turnoV, as
   const codigo = String(codigoV ?? "").trim();
   const nombre = String(nombreV ?? "").trim();
   if(!codigo || !nombre) return null;
+  const registrado = tieneValor(asistV);   // celda con 0 ó 1 (pasó asistencia)
   return {
     codigo, escuela: String(escuelaV ?? "").trim(),
     nie: String(nieV ?? "").trim(),
     nombre,
     seccion: String(seccionV ?? "").trim(),
     fecha: fechaV, turno: String(turnoV ?? "").trim(),
-    asistio: asistV
+    registrado,                            // true = la escuela ya reportó a este alumno
+    asistio: registrado && esUno(asistV)   // true = presente (1); 0 -> ausente; vacío -> pendiente
   };
 }
 function parsearEstudiantesGviz(json){
@@ -457,7 +470,7 @@ function parsearEstudiantesGviz(json){
   for(const f of (json.table.rows||[])){
     const c=f.c||[]; const cel=i=>(i>=0&&c[i])?c[i]:{};
     const e = armarEst(cel(ix.codigo).v, cel(ix.escuela).v, cel(ix.nie).v, cel(ix.nombre).v,
-      cel(ix.seccion).v, fechaISO(cel(ix.fecha).v, cel(ix.fecha).f), cel(ix.turno).v, esUno(cel(ix.asistencia).v));
+      cel(ix.seccion).v, fechaISO(cel(ix.fecha).v, cel(ix.fecha).f), cel(ix.turno).v, cel(ix.asistencia).v);
     if(e) out.push(e);
   }
   return out;
@@ -469,7 +482,7 @@ function parsearEstudiantesCSV(texto){
   for(let i=1;i<filas.length;i++){
     const f=filas[i]; const v=j=>(j>=0?f[j]:null);
     const e = armarEst(v(ix.codigo), v(ix.escuela), v(ix.nie), v(ix.nombre),
-      v(ix.seccion), fechaISO(v(ix.fecha), null), v(ix.turno), esUno(v(ix.asistencia)));
+      v(ix.seccion), fechaISO(v(ix.fecha), null), v(ix.turno), v(ix.asistencia));
     if(e) out.push(e);
   }
   return out;
@@ -519,7 +532,8 @@ function pasaTurno(e){ return turnoSel==="TODOS" || e.turno===turnoSel; }
 function procesarYPintar(){
   estadoEsc = {};
   for(const esc of escuelas){
-    estadoEsc[esc.codigo] = {color:"gris", asistentes:0, ausentes:0, total:0, reporto:false};
+    estadoEsc[esc.codigo] = {color:"gris", presentes:0, ausentes:0, pendientes:0,
+                             registrados:0, total:0, reporto:false, pendiente:false};
   }
   // Recorre estudiantes aplicando turno; la fecha define el "modo" de color
   for(const est of estudiantes){
@@ -528,23 +542,31 @@ function procesarYPintar(){
     if(!st) continue;
     // Para los conteos de la escuela en el contexto actual:
     // - si hay fecha seleccionada, solo cuentan los de esa fecha
-    // - si no hay fecha, cuentan todos (para detectar dónde ya hay asistencia)
+    // - si no hay fecha, cuentan todos
     const enContexto = (fechaSel==="") ? true : (est.fecha===fechaSel);
     if(!enContexto) continue;
     st.total++;
-    if(est.asistio){ st.asistentes++; st.reporto=true; }
-    else st.ausentes++;
+    if(!est.registrado){          // celda vacía -> pendiente
+      st.pendientes++;
+    }else{
+      st.registrados++;
+      if(est.asistio) st.presentes++;   // 1 -> presente
+      else st.ausentes++;               // 0 -> ausente real
+    }
   }
-  // Determina color de cada escuela
+  // Determina estado y color de cada escuela
   for(const esc of escuelas){
     const st = estadoEsc[esc.codigo];
+    st.reporto   = st.registrados > 0;                 // pasó asistencia (aunque todos sean ausentes)
+    st.pendiente = st.total > 0 && st.registrados === 0; // tiene alumnos pero no ha reportado
     if(fechaSel===""){
-      // Sin fecha: gris salvo donde haya al menos un asistente
-      st.color = st.asistentes>0 ? "verde" : "gris";
+      // Sin fecha (acumulado): verde si alguna vez reportó; gris si nunca
+      st.color = st.reporto ? "verde" : "gris";
     }else{
-      // Con fecha: la escuela "tomó asistencia" si tiene al menos un asistente ese día
-      if(st.total===0) st.color = "gris";          // no le toca esa fecha
-      else st.color = st.asistentes>0 ? "verde" : "rojo";
+      // Con fecha: gris si no le toca; verde si reportó esa fecha; rojo si está pendiente
+      if(st.total===0)      st.color = "gris";
+      else if(st.reporto)   st.color = "verde";
+      else                  st.color = "rojo";
     }
   }
   pintarResumen(); pintarMapa(); pintarListaEscuelas(); pintarTablaEstudiantes();
@@ -552,17 +574,18 @@ function procesarYPintar(){
 
 /* ================= RENDER ================= */
 function pintarResumen(){
-  let escReportadas=0, asistentes=0, ausentes=0;
+  let escReportadas=0, escPendientes=0, presentes=0, ausentes=0;
   for(const esc of escuelas){
     const st = estadoEsc[esc.codigo];
-    if(st.reporto) escReportadas++;
-    asistentes += st.asistentes;
-    // ausentes solo cuentan en escuelas que ya reportaron (criterio de Jose)
-    if(st.reporto) ausentes += st.ausentes;
+    if(st.reporto)   escReportadas++;
+    if(st.pendiente) escPendientes++;
+    presentes += st.presentes;
+    ausentes  += st.ausentes;   // ausentes = ceros reales (escuelas que ya reportaron)
   }
-  document.getElementById("numEscuelas").textContent = escReportadas.toLocaleString("es-SV");
-  document.getElementById("numAsistentes").textContent = asistentes.toLocaleString("es-SV");
-  document.getElementById("numAusentes").textContent = ausentes.toLocaleString("es-SV");
+  document.getElementById("numEscuelas").textContent   = escReportadas.toLocaleString("es-SV");
+  document.getElementById("numAsistentes").textContent = presentes.toLocaleString("es-SV");
+  document.getElementById("numAusentes").textContent   = ausentes.toLocaleString("es-SV");
+  document.getElementById("numPendientes").textContent = escPendientes.toLocaleString("es-SV");
 }
 
 const COLORES = {verde:"#16a34a", rojo:"#dc2626", gris:"#9aa7b4"};
@@ -590,12 +613,15 @@ function htmlPopup(esc, st){
   const ctx = fechaSel==="" ? "Acumulado (sin fecha)" : ("Fecha " + fechaSel);
   let estado;
   if(st.color==="verde") estado='<span style="color:#16a34a;font-weight:700">Tomó asistencia</span>';
-  else if(st.color==="rojo") estado='<span style="color:#dc2626;font-weight:700">Sin tomar asistencia</span>';
+  else if(st.color==="rojo") estado='<span style="color:#dc2626;font-weight:700">Pendiente (no ha tomado asistencia)</span>';
+  else if(st.pendiente) estado='<span style="color:#9aa7b4;font-weight:700">Pendiente (sin reportar)</span>';
   else estado='<span style="color:#9aa7b4;font-weight:700">Sin actividad en este filtro</span>';
+  let stats = `<div class="popup-stat">Presentes: <b style="color:#16a34a">${st.presentes}</b> · Ausentes: <b style="color:#dc2626">${st.ausentes}</b></div>`;
+  if(st.pendientes>0) stats += `<div class="popup-stat">Pendientes: <b style="color:#5b6b7b">${st.pendientes}</b></div>`;
   return `<div class="popup-nombre">${esc.nombre}</div>`+
     `<div class="popup-meta">Código ${esc.codigo}${esc.distrito?" · "+esc.distrito:""} · ${ctx}</div>`+
     `<div class="popup-stat">${estado}</div>`+
-    `<div class="popup-stat">Asistentes: <b style="color:#16a34a">${st.asistentes}</b> · Ausentes: <b style="color:#dc2626">${st.ausentes}</b></div>`;
+    stats;
 }
 
 function pintarListaEscuelas(){
@@ -603,8 +629,9 @@ function pintarListaEscuelas(){
   const q = normalizar(busquedaEsc);
   let lista = escuelas.filter(esc=>!q || normalizar(esc.nombre).includes(q) || esc.codigo.includes(q));
   // filtro por tarjeta activa
-  if(filtroTarjeta==="asistentes") lista = lista.filter(e=>estadoEsc[e.codigo].asistentes>0);
-  else if(filtroTarjeta==="ausentes") lista = lista.filter(e=>estadoEsc[e.codigo].reporto && estadoEsc[e.codigo].ausentes>0);
+  if(filtroTarjeta==="asistentes") lista = lista.filter(e=>estadoEsc[e.codigo].presentes>0);
+  else if(filtroTarjeta==="ausentes") lista = lista.filter(e=>estadoEsc[e.codigo].ausentes>0);
+  else if(filtroTarjeta==="pendientes") lista = lista.filter(e=>estadoEsc[e.codigo].pendiente);
   if(lista.length===0){ cont.innerHTML='<div class="vacio">No hay escuelas que coincidan.</div>'; return; }
   const peso={rojo:0,gris:1,verde:2};
   lista.sort((a,b)=>{
@@ -614,16 +641,17 @@ function pintarListaEscuelas(){
   });
   cont.innerHTML = lista.map(esc=>{
     const st=estadoEsc[esc.codigo];
+    const cifras = st.pendiente
+      ? `<div class="frac" style="color:var(--texto-suave);font-size:11px">Pendiente</div>`
+      : `<div class="frac"><span style="color:#16a34a">${st.presentes}</span>/<span style="color:#dc2626">${st.ausentes}</span></div>
+         <div class="lbl">pres/aus</div>`;
     return `<div class="esc-item" data-codigo="${esc.codigo}">
       <div class="punto ${st.color}"></div>
       <div>
         <div class="nombre">${esc.nombre}</div>
         <div class="meta">Cód ${esc.codigo}${esc.distrito?" · "+esc.distrito:""}</div>
       </div>
-      <div class="cifras">
-        <div class="frac"><span style="color:#16a34a">${st.asistentes}</span>/<span style="color:#dc2626">${st.ausentes}</span></div>
-        <div class="lbl">asist/aus</div>
-      </div>
+      <div class="cifras">${cifras}</div>
     </div>`;
   }).join("");
   cont.querySelectorAll(".esc-item").forEach(el=>{
@@ -641,24 +669,26 @@ function pintarTablaEstudiantes(){
     if(!pasaTurno(est)) return false;
     if(fechaSel!=="" && est.fecha!==fechaSel) return false;
     if(filtroTarjeta==="asistentes" && !est.asistio) return false;
-    if(filtroTarjeta==="ausentes"){
-      if(est.asistio) return false;
-      if(!estadoEsc[est.codigo] || !estadoEsc[est.codigo].reporto) return false; // ausente real
-    }
+    if(filtroTarjeta==="ausentes" && (!est.registrado || est.asistio)) return false; // ausente real (0)
+    if(filtroTarjeta==="pendientes" && est.registrado) return false;                  // sin reportar (vacío)
     if(q && !normalizar(est.nombre).includes(q) && !normalizar(est.escuela).includes(q) && !normalizar(est.nie).includes(q)) return false;
     return true;
   });
   document.getElementById("contadorEst").textContent = lista.length.toLocaleString("es-SV") + " registros";
   const MAX = 500;
   const recortada = lista.slice(0, MAX);
-  tbody.innerHTML = recortada.map(e=>`<tr>
+  tbody.innerHTML = recortada.map(e=>{
+    const badge = !e.registrado
+      ? '<span class="badge pend">Pendiente</span>'
+      : (e.asistio ? '<span class="badge si">Asistió</span>' : '<span class="badge no">Ausente</span>');
+    return `<tr>
     <td>${e.nombre}</td>
     <td title="${e.escuela}">${e.escuela}</td>
     <td>${e.seccion||"–"}</td>
     <td>${e.fecha||"–"}</td>
     <td>${e.turno||"–"}</td>
-    <td>${e.asistio?'<span class="badge si">Asistió</span>':'<span class="badge no">Ausente</span>'}</td>
-  </tr>`).join("");
+    <td>${badge}</td>
+  </tr>`;}).join("");
   if(lista.length>MAX){
     tbody.innerHTML += `<tr><td colspan="6" style="text-align:center;color:var(--texto-suave);padding:10px">Mostrando ${MAX} de ${lista.length} registros. Use los filtros o el buscador para acotar.</td></tr>`;
   }
