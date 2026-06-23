@@ -331,7 +331,7 @@ async function cargarDatos(){
   ocultarAviso(); ultimoError = null;
 
   const filasEsc = await cargarTabla(SHEET_ESCUELAS, parsearEscuelasGviz, parsearEscuelasCSV);
-  if(filasEsc && filasEsc.length > 0) escuelas = filasEsc;
+  if(filasEsc && filasEsc.length > 0) escuelas = unicasPorCodigo(filasEsc);
 
   const filasEst = await cargarTabla(SHEET_ESTUDIANTES, parsearEstudiantesGviz, parsearEstudiantesCSV);
   if(filasEst) estudiantes = filasEst;
@@ -527,6 +527,22 @@ function actualizarFiltros(){
 
 // estudiantes que pasan el filtro de turno (la fecha se maneja aparte según el modo del mapa)
 function pasaTurno(e){ return turnoSel==="TODOS" || e.turno===turnoSel; }
+
+// El catálogo puede traer una escuela en varias filas (p. ej. dos turnos).
+// Deja un solo registro por código para no duplicar conteos, marcadores ni filas.
+function unicasPorCodigo(lista){
+  const map = {};
+  for(const e of lista){
+    if(!e || !e.codigo) continue;
+    const prev = map[e.codigo];
+    if(!prev){
+      map[e.codigo] = e;
+    }else if((prev.lat===null || prev.lng===null) && e.lat!==null && e.lng!==null){
+      prev.lat = e.lat; prev.lng = e.lng;   // completa coordenadas si a la primera le faltaban
+    }
+  }
+  return Object.values(map);
+}
 
 /* ================= LÓGICA DE ESTADO ================= */
 function procesarYPintar(){
