@@ -66,6 +66,12 @@
     background:#fff;border:1px solid var(--borde);border-radius:6px;
     padding:7px 10px;font-size:13px;cursor:pointer;color:var(--texto);
   }
+  .btn-limpiar{
+    margin-left:auto;background:#fff;color:var(--azul);border:1px solid var(--borde);
+    border-radius:6px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;
+    display:inline-flex;align-items:center;gap:6px;
+  }
+  .btn-limpiar:hover{background:#eef2f7}
 
   /* ===== Tarjetas resumen (botón de filtro) ===== */
   .resumen{
@@ -106,6 +112,8 @@
     display:flex;gap:9px;align-items:flex-start;
   }
   .esc-item:hover{background:#f0f4f9}
+  .esc-item.sel{background:#e8eef7;box-shadow:inset 3px 0 0 var(--azul-claro)}
+  .esc-item.sel:hover{background:#dfe8f5}
   .esc-item .punto{width:10px;height:10px;border-radius:50%;margin-top:4px;flex-shrink:0}
   .punto.verde{background:var(--verde)}
   .punto.rojo{background:var(--rojo)}
@@ -130,6 +138,12 @@
     display:flex;align-items:center;gap:10px;
   }
   .est-cab .titulo{font-size:12px;font-weight:700;color:var(--texto-suave);text-transform:uppercase;letter-spacing:.5px}
+  .est-cab .filtro-escuela{font-size:11.5px;font-weight:600;color:var(--azul);background:#e8eef7;
+    border:1px solid #c7d4ea;border-radius:999px;padding:4px 10px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:6px;max-width:300px}
+  .est-cab .filtro-escuela:hover{background:#dce6f5}
+  .est-cab .filtro-escuela .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px}
+  .est-cab .filtro-escuela .x{font-weight:700;opacity:.7}
   .est-cab input{
     margin-left:auto;width:240px;max-width:50%;padding:6px 9px;
     border:1px solid var(--borde);border-radius:6px;font-size:12.5px;
@@ -198,6 +212,7 @@
     <label for="selTurno">Turno</label>
     <select id="selTurno"></select>
   </div>
+  <button class="btn-limpiar" id="btnLimpiar" title="Quitar todos los filtros">↺ Limpiar filtros</button>
 </div>
 
 <div class="resumen">
@@ -233,6 +248,7 @@
       <div class="est-cab">
         <span class="titulo">Estudiantes</span>
         <span class="titulo" id="contadorEst" style="font-weight:400;text-transform:none"></span>
+        <span id="filtroEscuela" class="filtro-escuela" style="display:none"></span>
         <input type="text" id="buscarEst" placeholder="Buscar estudiante, escuela o NIE…">
       </div>
       <div class="est-scroll">
@@ -273,6 +289,7 @@ let turnoSel = "TODOS";
 let filtroTarjeta = "todas"; // todas | asistentes | ausentes | pendientes
 let busquedaEsc = "";
 let busquedaEst = "";
+let escuelaSel = "";      // código de escuela seleccionada (filtra la tabla de abajo)
 let temporizador = null;
 let marcadores = {};
 let estadoEsc = {};       // codigo -> {color, presentes, ausentes, pendientes, registrados, total, reporto, pendiente}
@@ -618,6 +635,7 @@ function pintarMapa(){
       fillColor:COLORES[st.color], fillOpacity: st.color==="gris"?0.7:0.92
     });
     m.bindPopup(htmlPopup(esc, st), {minWidth:200});
+    m.on("click", () => seleccionarEscuela(esc.codigo));
     m.addTo(capaMarcadores); marcadores[esc.codigo]=m;
   }
   if(!yaAjustado && Object.keys(marcadores).length>0){
@@ -661,7 +679,7 @@ function pintarListaEscuelas(){
       ? `<div class="frac" style="color:var(--texto-suave);font-size:11px">Pendiente</div>`
       : `<div class="frac"><span style="color:#16a34a">${st.presentes}</span>/<span style="color:#dc2626">${st.ausentes}</span></div>
          <div class="lbl">pres/aus</div>`;
-    return `<div class="esc-item" data-codigo="${esc.codigo}">
+    return `<div class="esc-item${esc.codigo===escuelaSel?' sel':''}" data-codigo="${esc.codigo}">
       <div class="punto ${st.color}"></div>
       <div>
         <div class="nombre">${esc.nombre}</div>
@@ -672,16 +690,65 @@ function pintarListaEscuelas(){
   }).join("");
   cont.querySelectorAll(".esc-item").forEach(el=>{
     el.addEventListener("click",()=>{
-      const m=marcadores[el.dataset.codigo];
+      const cod = el.dataset.codigo;
+      const m=marcadores[cod];
       if(m){ mapa.flyTo(m.getLatLng(),15,{duration:.8}); m.openPopup(); }
+      seleccionarEscuela(cod);
     });
   });
+}
+
+/* ===== Filtro de la tabla por escuela (click en mapa o lista) ===== */
+function seleccionarEscuela(codigo){
+  escuelaSel = (escuelaSel === codigo) ? "" : codigo;   // volver a hacer click la quita
+  actualizarChipEscuela();
+  pintarListaEscuelas();        // refresca el resaltado
+  pintarTablaEstudiantes();     // filtra la tabla de abajo
+}
+
+function limpiarFiltroEscuela(){
+  escuelaSel = "";
+  actualizarChipEscuela();
+  pintarListaEscuelas();
+  pintarTablaEstudiantes();
+}
+
+/* Restablece TODOS los filtros: escuela, tarjeta, turno, fecha y búsquedas */
+function limpiarFiltros(){
+  escuelaSel = "";
+  filtroTarjeta = "todas";
+  turnoSel = "TODOS";
+  fechaSel = "";
+  busquedaEsc = "";
+  busquedaEst = "";
+  document.getElementById("buscarEsc").value = "";
+  document.getElementById("buscarEst").value = "";
+  const sf = document.getElementById("selFecha"); if(sf) sf.value = "";
+  const st = document.getElementById("selTurno"); if(st) st.value = "TODOS";
+  document.querySelectorAll(".tarjeta").forEach(c=>c.classList.remove("activa"));
+  const cardEsc = document.getElementById("cardEscuelas"); if(cardEsc) cardEsc.classList.add("activa");
+  actualizarChipEscuela();
+  yaAjustado = false;          // reencuadra el mapa
+  procesarYPintar();
+}
+
+function actualizarChipEscuela(){
+  const chip = document.getElementById("filtroEscuela");
+  if(escuelaSel){
+    const e = escuelas.find(x => x.codigo === escuelaSel);
+    chip.innerHTML = '<span class="nm">📍 ' + (e ? e.nombre : escuelaSel) + '</span><span class="x">✕</span>';
+    chip.style.display = "";
+  }else{
+    chip.style.display = "none";
+    chip.innerHTML = "";
+  }
 }
 
 function pintarTablaEstudiantes(){
   const tbody = document.getElementById("tbodyEst");
   const q = normalizar(busquedaEst);
   let lista = estudiantes.filter(est=>{
+    if(escuelaSel && est.codigo!==escuelaSel) return false;   // escuela seleccionada
     if(!pasaTurno(est)) return false;
     if(fechaSel!=="" && est.fecha!==fechaSel) return false;
     if(filtroTarjeta==="asistentes" && !est.asistio) return false;
@@ -731,6 +798,8 @@ document.getElementById("buscarEsc").addEventListener("input", ev=>{
 document.getElementById("buscarEst").addEventListener("input", ev=>{
   busquedaEst = ev.target.value.trim(); pintarTablaEstudiantes();
 });
+document.getElementById("filtroEscuela").addEventListener("click", limpiarFiltroEscuela);
+document.getElementById("btnLimpiar").addEventListener("click", limpiarFiltros);
 document.querySelectorAll(".tarjeta").forEach(card=>{
   card.addEventListener("click",()=>{
     const f = card.dataset.f;
