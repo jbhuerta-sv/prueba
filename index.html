@@ -94,6 +94,13 @@
   .tarjeta.t-ausentes .valor{color:var(--rojo)}
   .tarjeta.t-pendientes{border-left-color:var(--gris)}
   .tarjeta.t-pendientes .valor{color:var(--texto-suave)}
+  .tarjeta.t-esperados{border-left-color:var(--azul)}
+  .tarjeta.t-esperados .valor{color:var(--azul)}
+  .tarjeta.info{cursor:default}
+  .tarjeta.info:hover{box-shadow:none}
+  .tarjeta .porcentaje{font-size:12px;font-weight:600;color:var(--texto-suave);margin-top:2px}
+  .tarjeta.t-asistentes .porcentaje{color:var(--verde)}
+  .tarjeta.t-ausentes .porcentaje{color:var(--rojo)}
 
   /* ===== Cuerpo: tabla escuelas + mapa ===== */
   .cuerpo{flex:1;display:flex;min-height:0}
@@ -220,13 +227,19 @@
     <div class="valor" id="numEscuelas">–</div>
     <div class="etiqueta">Escuelas reportadas</div>
   </div>
+  <div class="tarjeta t-esperados info" id="cardEsperados">
+    <div class="valor" id="numEsperados">–</div>
+    <div class="etiqueta">Total niños esperados</div>
+  </div>
   <div class="tarjeta t-asistentes" id="cardAsistentes" data-f="asistentes">
     <div class="valor" id="numAsistentes">–</div>
     <div class="etiqueta">Niños asistentes</div>
+    <div class="porcentaje" id="pctAsistentes"></div>
   </div>
   <div class="tarjeta t-ausentes" id="cardAusentes" data-f="ausentes">
     <div class="valor" id="numAusentes">–</div>
     <div class="etiqueta">Niños ausentes</div>
+    <div class="porcentaje" id="pctAusentes"></div>
   </div>
   <div class="tarjeta t-pendientes" id="cardPendientes" data-f="pendientes">
     <div class="valor" id="numPendientes">–</div>
@@ -545,6 +558,10 @@ function actualizarFiltros(){
 // estudiantes que pasan el filtro de turno (la fecha se maneja aparte según el modo del mapa)
 function pasaTurno(e){ return turnoSel==="TODOS" || e.turno===turnoSel; }
 
+// ¿Hay un filtro de contexto activo (fecha o turno)? Si lo hay, el mapa y el
+// listado lateral solo muestran escuelas con alumnos en ese contexto (total > 0).
+function hayFiltroContexto(){ return fechaSel!=="" || turnoSel!=="TODOS"; }
+
 // El catálogo puede traer una escuela en varias filas (p. ej. dos turnos).
 // Deja un solo registro por código para no duplicar conteos, marcadores ni filas.
 function unicasPorCodigo(lista){
@@ -607,18 +624,24 @@ function procesarYPintar(){
 
 /* ================= RENDER ================= */
 function pintarResumen(){
-  let escReportadas=0, escPendientes=0, presentes=0, ausentes=0;
+  let escReportadas=0, escPendientes=0, presentes=0, ausentes=0, esperados=0;
   for(const esc of escuelas){
     const st = estadoEsc[esc.codigo];
     if(st.reporto)   escReportadas++;
     if(st.pendiente) escPendientes++;
     presentes += st.presentes;
     ausentes  += st.ausentes;   // ausentes = ceros reales (escuelas que ya reportaron)
+    esperados += st.total;      // universo del contexto: presentes + ausentes + pendientes
   }
+  const reportados = presentes + ausentes;   // base de la tasa real: niños con asistencia tomada
+  const pct = n => reportados>0 ? Math.round(n/reportados*100) + "% de reportados" : "";
   document.getElementById("numEscuelas").textContent   = escReportadas.toLocaleString("es-SV");
+  document.getElementById("numEsperados").textContent  = esperados.toLocaleString("es-SV");
   document.getElementById("numAsistentes").textContent = presentes.toLocaleString("es-SV");
   document.getElementById("numAusentes").textContent   = ausentes.toLocaleString("es-SV");
   document.getElementById("numPendientes").textContent = escPendientes.toLocaleString("es-SV");
+  document.getElementById("pctAsistentes").textContent = pct(presentes);
+  document.getElementById("pctAusentes").textContent   = pct(ausentes);
 }
 
 const COLORES = {verde:"#16a34a", rojo:"#dc2626", gris:"#9aa7b4"};
@@ -628,6 +651,7 @@ function pintarMapa(){
   const q = normalizar(busquedaEsc);
   for(const esc of escuelas){
     if(esc.lat===null||esc.lng===null) continue;
+    if(hayFiltroContexto() && estadoEsc[esc.codigo].total===0) continue;  // sin alumnos en la fecha/turno
     if(q && !normalizar(esc.nombre).includes(q) && !esc.codigo.includes(q)) continue;
     const st = estadoEsc[esc.codigo];
     const m = L.circleMarker([esc.lat,esc.lng],{
@@ -662,6 +686,8 @@ function pintarListaEscuelas(){
   const cont = document.getElementById("listaEscuelas");
   const q = normalizar(busquedaEsc);
   let lista = escuelas.filter(esc=>!q || normalizar(esc.nombre).includes(q) || esc.codigo.includes(q));
+  // filtro por contexto: con fecha o turno seleccionado, solo escuelas con alumnos en ese contexto
+  if(hayFiltroContexto()) lista = lista.filter(e=>estadoEsc[e.codigo].total>0);
   // filtro por tarjeta activa
   if(filtroTarjeta==="asistentes") lista = lista.filter(e=>estadoEsc[e.codigo].presentes>0);
   else if(filtroTarjeta==="ausentes") lista = lista.filter(e=>estadoEsc[e.codigo].ausentes>0);
@@ -790,7 +816,7 @@ document.getElementById("selFecha").addEventListener("change", ev=>{
   fechaSel = ev.target.value; yaAjustado=false; procesarYPintar();
 });
 document.getElementById("selTurno").addEventListener("change", ev=>{
-  turnoSel = ev.target.value; procesarYPintar();
+  turnoSel = ev.target.value; yaAjustado=false; procesarYPintar();
 });
 document.getElementById("buscarEsc").addEventListener("input", ev=>{
   busquedaEsc = ev.target.value.trim(); pintarMapa(); pintarListaEscuelas();
@@ -803,6 +829,7 @@ document.getElementById("btnLimpiar").addEventListener("click", limpiarFiltros);
 document.querySelectorAll(".tarjeta").forEach(card=>{
   card.addEventListener("click",()=>{
     const f = card.dataset.f;
+    if(!f) return;   // tarjetas informativas (p. ej. Total esperados) no filtran
     filtroTarjeta = (filtroTarjeta===f) ? "todas" : f;  // segundo clic deselecciona
     document.querySelectorAll(".tarjeta").forEach(c=>c.classList.remove("activa"));
     if(filtroTarjeta==="todas") document.getElementById("cardEscuelas").classList.add("activa");
