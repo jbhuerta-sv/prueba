@@ -17,6 +17,8 @@
     --verde-suave:#e7f6ec;
     --rojo:#dc2626;
     --rojo-suave:#fdeaea;
+    --naranja:#ea580c;
+    --naranja-suave:#fdeede;
     --gris:#9aa7b4;
     --gris-suave:#eef1f5;
     --texto:#1c2733;
@@ -55,6 +57,18 @@
   }
   .ultima{font-size:11px;opacity:.8}
 
+  /* ===== Pestañas (vistas) ===== */
+  .tabs{display:flex;gap:2px;background:var(--azul);padding:0 18px}
+  .tab{
+    background:transparent;color:rgba(255,255,255,.7);border:none;
+    padding:11px 18px;font-size:13px;font-weight:600;cursor:pointer;
+    border-bottom:3px solid transparent;display:inline-flex;align-items:center;gap:7px;
+  }
+  .tab:hover{color:#fff}
+  .tab.activa{color:#fff;border-bottom-color:#fff;background:rgba(255,255,255,.08)}
+  .vista{flex:1;display:none;flex-direction:column;min-height:0}
+  .vista.activa{display:flex}
+
   /* ===== Barra de filtros ===== */
   .filtros-barra{
     display:flex;gap:14px;align-items:center;flex-wrap:wrap;
@@ -92,6 +106,8 @@
   .tarjeta.t-asistentes .valor{color:var(--verde)}
   .tarjeta.t-ausentes{border-left-color:var(--rojo)}
   .tarjeta.t-ausentes .valor{color:var(--rojo)}
+  .tarjeta.t-iniciadas{border-left-color:var(--naranja)}
+  .tarjeta.t-iniciadas .valor{color:var(--naranja)}
   .tarjeta.t-pendientes{border-left-color:var(--gris)}
   .tarjeta.t-pendientes .valor{color:var(--texto-suave)}
   .tarjeta.t-esperados{border-left-color:var(--azul)}
@@ -124,6 +140,7 @@
   .esc-item .punto{width:10px;height:10px;border-radius:50%;margin-top:4px;flex-shrink:0}
   .punto.verde{background:var(--verde)}
   .punto.rojo{background:var(--rojo)}
+  .punto.naranja{background:var(--naranja)}
   .punto.gris{background:var(--gris)}
   .esc-item .nombre{font-size:12.5px;font-weight:600;line-height:1.25}
   .esc-item .meta{font-size:10.5px;color:var(--texto-suave);margin-top:2px}
@@ -134,6 +151,7 @@
 
   .centro{flex:1;display:flex;flex-direction:column;min-width:0}
   #mapa{flex:1;min-height:0}
+  #mapaPrueba{flex:1;min-height:0}
 
   /* ===== Listado de estudiantes (abajo) ===== */
   .estudiantes-panel{
@@ -196,7 +214,7 @@
 <header>
   <div>
     <h1>Asistencia de Estudiantes</h1>
-    <div class="sub">Datos en vivo desde Google Sheets · pestañas Centros Escolares y Estudiantes</div>
+    <div class="sub">Datos en vivo desde Google Sheets · pestañas Centros Escolares, Estudiantes y Prueba</div>
   </div>
   <div class="header-derecha">
     <span class="ultima" id="ultima">Sin datos cargados</span>
@@ -210,6 +228,12 @@
   </div>
 </header>
 
+<nav class="tabs">
+  <button class="tab activa" data-v="asistencia">👥 Asistencia</button>
+  <button class="tab" data-v="prueba">📝 Estado de la prueba</button>
+</nav>
+
+<div id="vistaAsistencia" class="vista activa">
 <div class="filtros-barra">
   <div class="filtro-grupo">
     <label for="selFecha">Fecha</label>
@@ -282,6 +306,56 @@
     </div>
   </div>
 </div>
+</div>
+
+<div id="vistaPrueba" class="vista">
+  <div class="filtros-barra">
+    <div class="filtro-grupo">
+      <label for="selFechaP">Fecha</label>
+      <select id="selFechaP"></select>
+    </div>
+    <div class="filtro-grupo">
+      <label for="selTurnoP">Turno</label>
+      <select id="selTurnoP"></select>
+    </div>
+    <button class="btn-limpiar" id="btnLimpiarP" title="Quitar todos los filtros">↺ Limpiar filtros</button>
+  </div>
+
+  <div class="resumen">
+    <div class="tarjeta t-escuelas activa" id="cardEscPrueba" data-f="todas">
+      <div class="valor" id="numEscPrueba">–</div>
+      <div class="etiqueta">Escuelas</div>
+    </div>
+    <div class="tarjeta t-ausentes" id="cardNoIniciadas" data-f="rojo">
+      <div class="valor" id="numNoIniciadas">–</div>
+      <div class="etiqueta">No han iniciado</div>
+      <div class="porcentaje" id="pctNoIniciadas"></div>
+    </div>
+    <div class="tarjeta t-iniciadas" id="cardIniciadas" data-f="naranja">
+      <div class="valor" id="numIniciadas">–</div>
+      <div class="etiqueta">En curso (iniciaron)</div>
+      <div class="porcentaje" id="pctIniciadas"></div>
+    </div>
+    <div class="tarjeta t-asistentes" id="cardFinalizadas" data-f="verde">
+      <div class="valor" id="numFinalizadas">–</div>
+      <div class="etiqueta">Finalizaron</div>
+      <div class="porcentaje" id="pctFinalizadas"></div>
+    </div>
+  </div>
+
+  <div class="cuerpo">
+    <aside>
+      <div class="aside-cab">Escuelas</div>
+      <div class="controles">
+        <input type="text" id="buscarEscP" placeholder="Buscar escuela o código…">
+      </div>
+      <div class="lista-escuelas" id="listaEscuelasP"><div class="vacio">Cargando datos…</div></div>
+    </aside>
+    <div class="centro">
+      <div id="mapaPrueba"></div>
+    </div>
+  </div>
+</div>
 
 <div class="aviso" id="aviso"></div>
 
@@ -291,6 +365,7 @@
 const SHEET_ID = "1OYIuc2dyP5GfQEcbo8GLjke-L4ZdYcqhnliVyUzUl8U";
 const SHEET_ESCUELAS = "Centros Escolares";
 const SHEET_ESTUDIANTES = "Estudiantes";
+const SHEET_PRUEBA = "Prueba";
 function urlsGviz(hoja){
   const base = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(hoja)}`;
   return {json: base + "&tqx=out:json", csv: base + "&tqx=out:csv"};
@@ -311,6 +386,22 @@ let temporizador = null;
 let marcadores = {};
 let estadoEsc = {};       // codigo -> {color, presentes, ausentes, pendientes, registrados, total, reporto, pendiente}
 let ultimoError = null;
+
+/* ===== Estado de la vista PRUEBA ===== */
+let pruebaFilas = [];     // {codigo, nombre, aula, fecha, turno, inicio, fin, lat, lng}
+let escuelasPrueba = [];  // dedup por codigo {codigo, nombre, lat, lng}
+let fechasPrueba = [];
+let turnosPrueba = [];
+let fechaSelP = "";
+let turnoSelP = "TODOS";
+let filtroTarjetaP = "todas";  // todas | rojo | naranja | verde
+let busquedaEscP = "";
+let escuelaSelP = "";
+let estadoPrueba = {};    // codigo -> {color, total, iniciadas, finalizadas, noiniciadas}
+let mapaPrueba = null;
+let capaMarcadoresP = null;
+let marcadoresP = {};
+let yaAjustadoP = false;
 
 /* ================= MAPA ================= */
 const mapa = L.map("mapa").setView([13.70, -89.15], 10);
@@ -369,6 +460,14 @@ async function cargarDatos(){
 
   const filasEst = await cargarTabla(SHEET_ESTUDIANTES, parsearEstudiantesGviz, parsearEstudiantesCSV);
   if(filasEst) estudiantes = filasEst;
+
+  const filasPrueba = await cargarTabla(SHEET_PRUEBA, parsearPruebaGviz, parsearPruebaCSV);
+  if(filasPrueba) pruebaFilas = filasPrueba;
+  if(pruebaFilas.length > 0){
+    actualizarFiltrosPrueba();
+    yaAjustadoP = false;
+    procesarYPintarPrueba();
+  }
 
   if(escuelas.length > 0 && estudiantes !== null){
     actualizarFiltros();
@@ -812,6 +911,271 @@ function pintarTablaEstudiantes(){
   }
 }
 
+/* ================= VISTA PRUEBA ================= */
+/* ---- Parser hoja Prueba ---- */
+function idxPrueba(cols){
+  return {
+    codigo: indiceCol(cols, ["codigo","código","codigo ce"], 0),
+    nombre: indiceCol(cols, ["centro escolar","centro educativo","nombre","escuela"], 1),
+    aula: indiceCol(cols, ["aula"], -1),
+    fecha: indiceCol(cols, ["fecha"], -1),
+    turno: indiceCol(cols, ["horario","turno"], -1),
+    inicio: indiceCol(cols, ["inicio prueba","inicio_prueba","inicio"], -1),
+    fin: indiceCol(cols, ["finalizo prueba","finalizó prueba","fin prueba","finalizo","finalizó","fin"], -1),
+    lat: indiceCol(cols, ["latitud","latitude","lat"], -1),
+    lng: indiceCol(cols, ["longitud","longitude","lng","lon"], -1)
+  };
+}
+function armarPrueba(codigoV, nombreV, aulaV, fechaV, turnoV, inicioV, finV, latV, lngV){
+  const codigo = String(codigoV ?? "").trim();
+  const nombre = String(nombreV ?? "").trim();
+  if(!codigo || !nombre) return null;
+  const lat = parseFloat(latV), lng = parseFloat(lngV);
+  const valida = lat>12.5 && lat<14.8 && lng>-90.5 && lng<-87.0;
+  return {
+    codigo, nombre,
+    aula: String(aulaV ?? "").trim(),
+    fecha: fechaV, turno: String(turnoV ?? "").trim(),
+    inicio: esUno(inicioV),   // "SI" -> true
+    fin: esUno(finV),         // "SI" -> true
+    lat: valida?lat:null, lng: valida?lng:null
+  };
+}
+function parsearPruebaGviz(json){
+  const cols = (json.table.cols||[]).map(c=>normalizar(c.label));
+  const ix = idxPrueba(cols);
+  const out=[];
+  for(const f of (json.table.rows||[])){
+    const c=f.c||[]; const cel=i=>(i>=0&&c[i])?c[i]:{};
+    const e = armarPrueba(cel(ix.codigo).v, cel(ix.nombre).v, cel(ix.aula).v,
+      fechaISO(cel(ix.fecha).v, cel(ix.fecha).f), cel(ix.turno).v,
+      cel(ix.inicio).v, cel(ix.fin).v, cel(ix.lat).v, cel(ix.lng).v);
+    if(e) out.push(e);
+  }
+  return out;
+}
+function parsearPruebaCSV(texto){
+  const filas = lineasCSV(texto); if(filas.length<2) return [];
+  const cols = filas[0].map(normalizar); const ix = idxPrueba(cols);
+  const out=[];
+  for(let i=1;i<filas.length;i++){
+    const f=filas[i]; const v=j=>(j>=0?f[j]:null);
+    const e = armarPrueba(v(ix.codigo), v(ix.nombre), v(ix.aula),
+      fechaISO(v(ix.fecha), null), v(ix.turno), v(ix.inicio), v(ix.fin), v(ix.lat), v(ix.lng));
+    if(e) out.push(e);
+  }
+  return out;
+}
+
+/* ---- Filtros Prueba ---- */
+function actualizarFiltrosPrueba(){
+  fechasPrueba = [...new Set(pruebaFilas.map(e=>e.fecha).filter(Boolean))].sort();
+  turnosPrueba = [...new Set(pruebaFilas.map(e=>e.turno).filter(Boolean))].sort();
+
+  const sF = document.getElementById("selFechaP"), antF = fechaSelP;
+  sF.innerHTML = '<option value="">— Todas las fechas —</option>';
+  for(const f of fechasPrueba){ const o=document.createElement("option"); o.value=f; o.textContent=f; sF.appendChild(o); }
+  fechaSelP = (antF==="" || fechasPrueba.includes(antF)) ? antF : "";
+  sF.value = fechaSelP;
+
+  const sT = document.getElementById("selTurnoP"), antT = turnoSelP;
+  sT.innerHTML = '<option value="TODOS">Todos los turnos</option>';
+  for(const t of turnosPrueba){ const o=document.createElement("option"); o.value=t; o.textContent=t; sT.appendChild(o); }
+  turnoSelP = (antT==="TODOS" || turnosPrueba.includes(antT)) ? antT : "TODOS";
+  sT.value = turnoSelP;
+}
+function pasaTurnoP(e){ return turnoSelP==="TODOS" || e.turno===turnoSelP; }
+
+// Una escuela puede tener varias aulas (filas). Deja un registro por código con coordenadas válidas.
+function unicasPruebaPorCodigo(){
+  const map = {};
+  for(const f of pruebaFilas){
+    if(!f.codigo) continue;
+    if(!map[f.codigo]){ map[f.codigo] = {codigo:f.codigo, nombre:f.nombre, lat:f.lat, lng:f.lng}; }
+    else if(map[f.codigo].lat===null && f.lat!==null){ map[f.codigo].lat=f.lat; map[f.codigo].lng=f.lng; }
+  }
+  return Object.values(map);
+}
+
+/* ---- Lógica de estado Prueba ----
+   Agrupa las aulas de cada escuela en el contexto (fecha/turno):
+   verde  = TODAS las aulas finalizaron
+   naranja= al menos una inició (pero no todas finalizaron)
+   rojo   = ninguna aula ha iniciado
+   gris   = la escuela no tiene aulas en el filtro actual                 */
+function procesarYPintarPrueba(){
+  escuelasPrueba = unicasPruebaPorCodigo();
+  estadoPrueba = {};
+  for(const esc of escuelasPrueba){
+    estadoPrueba[esc.codigo] = {color:"gris", total:0, iniciadas:0, finalizadas:0, noiniciadas:0};
+  }
+  for(const f of pruebaFilas){
+    if(!pasaTurnoP(f)) continue;
+    if(fechaSelP!=="" && f.fecha!==fechaSelP) continue;
+    const st = estadoPrueba[f.codigo]; if(!st) continue;
+    st.total++;
+    if(f.fin)         st.finalizadas++;   // finalizó (cuenta como iniciada también)
+    else if(f.inicio) st.iniciadas++;     // inició pero no finalizó
+    else              st.noiniciadas++;   // sin iniciar
+  }
+  for(const esc of escuelasPrueba){
+    const st = estadoPrueba[esc.codigo];
+    if(st.total===0)                                st.color = "gris";
+    else if(st.finalizadas===st.total)              st.color = "verde";
+    else if(st.iniciadas + st.finalizadas > 0)      st.color = "naranja";
+    else                                            st.color = "rojo";
+  }
+  pintarResumenPrueba(); pintarMapaPrueba(); pintarListaEscuelasPrueba();
+}
+
+/* ---- Render Prueba ---- */
+function pintarResumenPrueba(){
+  let escTotal=0, rojo=0, naranja=0, verde=0;
+  for(const esc of escuelasPrueba){
+    const st = estadoPrueba[esc.codigo];
+    if(st.total===0) continue;
+    escTotal++;
+    if(st.color==="rojo") rojo++;
+    else if(st.color==="naranja") naranja++;
+    else if(st.color==="verde") verde++;
+  }
+  const pct = n => escTotal>0 ? Math.round(n/escTotal*100) + "% de escuelas" : "";
+  document.getElementById("numEscPrueba").textContent     = escTotal.toLocaleString("es-SV");
+  document.getElementById("numNoIniciadas").textContent   = rojo.toLocaleString("es-SV");
+  document.getElementById("numIniciadas").textContent     = naranja.toLocaleString("es-SV");
+  document.getElementById("numFinalizadas").textContent   = verde.toLocaleString("es-SV");
+  document.getElementById("pctNoIniciadas").textContent   = pct(rojo);
+  document.getElementById("pctIniciadas").textContent     = pct(naranja);
+  document.getElementById("pctFinalizadas").textContent   = pct(verde);
+}
+
+const COLORES_P = {verde:"#16a34a", naranja:"#ea580c", rojo:"#dc2626", gris:"#9aa7b4"};
+
+function initMapaPrueba(){
+  if(mapaPrueba) return;
+  mapaPrueba = L.map("mapaPrueba").setView([13.70,-89.15],10);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom:19, attribution:"&copy; OpenStreetMap"
+  }).addTo(mapaPrueba);
+  capaMarcadoresP = L.layerGroup().addTo(mapaPrueba);
+  const ley = L.control({position:"bottomright"});
+  ley.onAdd = function(){
+    const d = L.DomUtil.create("div","leyenda");
+    d.innerHTML =
+      '<span class="pt" style="background:#dc2626"></span> No ha iniciado<br>' +
+      '<span class="pt" style="background:#ea580c"></span> Inició (en curso)<br>' +
+      '<span class="pt" style="background:#16a34a"></span> Finalizó';
+    return d;
+  };
+  ley.addTo(mapaPrueba);
+}
+function pintarMapaPrueba(){
+  if(!mapaPrueba) return;
+  capaMarcadoresP.clearLayers(); marcadoresP={};
+  const q = normalizar(busquedaEscP);
+  for(const esc of escuelasPrueba){
+    if(esc.lat===null||esc.lng===null) continue;
+    const st = estadoPrueba[esc.codigo];
+    if(st.total===0) continue;
+    if(filtroTarjetaP!=="todas" && st.color!==filtroTarjetaP) continue;
+    if(q && !normalizar(esc.nombre).includes(q) && !esc.codigo.includes(q)) continue;
+    const m = L.circleMarker([esc.lat,esc.lng],{
+      radius:7, color:"#fff", weight:1.5,
+      fillColor:COLORES_P[st.color], fillOpacity:0.92
+    });
+    m.bindPopup(htmlPopupPrueba(esc, st), {minWidth:210});
+    m.on("click", ()=>seleccionarEscuelaP(esc.codigo));
+    m.addTo(capaMarcadoresP); marcadoresP[esc.codigo]=m;
+  }
+  if(!yaAjustadoP && Object.keys(marcadoresP).length>0){
+    mapaPrueba.fitBounds(L.featureGroup(Object.values(marcadoresP)).getBounds().pad(0.08));
+    yaAjustadoP=true;
+  }
+}
+function htmlPopupPrueba(esc, st){
+  const ctx = fechaSelP==="" ? "Todas las fechas" : ("Fecha " + fechaSelP);
+  let estado;
+  if(st.color==="verde")        estado='<span style="color:#16a34a;font-weight:700">Finalizó la prueba</span>';
+  else if(st.color==="naranja") estado='<span style="color:#ea580c;font-weight:700">En curso (ya inició)</span>';
+  else                          estado='<span style="color:#dc2626;font-weight:700">No ha iniciado</span>';
+  const stats = `<div class="popup-stat">Aulas: <b>${st.total}</b></div>`+
+    `<div class="popup-stat">Finalizadas: <b style="color:#16a34a">${st.finalizadas}</b> · En curso: <b style="color:#ea580c">${st.iniciadas}</b> · Sin iniciar: <b style="color:#dc2626">${st.noiniciadas}</b></div>`;
+  return `<div class="popup-nombre">${esc.nombre}</div>`+
+    `<div class="popup-meta">Código ${esc.codigo} · ${ctx}</div>`+
+    `<div class="popup-stat">${estado}</div>`+
+    stats;
+}
+function pintarListaEscuelasPrueba(){
+  const cont = document.getElementById("listaEscuelasP");
+  const q = normalizar(busquedaEscP);
+  let lista = escuelasPrueba.filter(esc=>{
+    const st = estadoPrueba[esc.codigo];
+    if(st.total===0) return false;
+    if(filtroTarjetaP!=="todas" && st.color!==filtroTarjetaP) return false;
+    if(q && !normalizar(esc.nombre).includes(q) && !esc.codigo.includes(q)) return false;
+    return true;
+  });
+  if(lista.length===0){ cont.innerHTML='<div class="vacio">No hay escuelas que coincidan.</div>'; return; }
+  const peso={rojo:0,naranja:1,verde:2,gris:3};
+  lista.sort((a,b)=>{
+    const ea=estadoPrueba[a.codigo], eb=estadoPrueba[b.codigo];
+    if(peso[ea.color]!==peso[eb.color]) return peso[ea.color]-peso[eb.color];
+    return a.nombre.localeCompare(b.nombre,"es");
+  });
+  cont.innerHTML = lista.map(esc=>{
+    const st=estadoPrueba[esc.codigo];
+    const etq = st.color==="verde" ? "Finalizó" : (st.color==="naranja" ? "En curso" : "No iniciado");
+    const colEtq = st.color==="verde" ? "#16a34a" : (st.color==="naranja" ? "#ea580c" : "#dc2626");
+    return `<div class="esc-item${esc.codigo===escuelaSelP?' sel':''}" data-codigo="${esc.codigo}">
+      <div class="punto ${st.color}"></div>
+      <div>
+        <div class="nombre">${esc.nombre}</div>
+        <div class="meta">Cód ${esc.codigo} · ${st.total} aula(s)</div>
+      </div>
+      <div class="cifras">
+        <div class="frac" style="font-size:11px;color:${colEtq}">${etq}</div>
+        <div class="lbl">${st.finalizadas}/${st.total} fin.</div>
+      </div>
+    </div>`;
+  }).join("");
+  cont.querySelectorAll(".esc-item").forEach(el=>{
+    el.addEventListener("click",()=>{
+      const cod = el.dataset.codigo;
+      const m = marcadoresP[cod];
+      if(m){ mapaPrueba.flyTo(m.getLatLng(),15,{duration:.8}); m.openPopup(); }
+      seleccionarEscuelaP(cod);
+    });
+  });
+}
+function seleccionarEscuelaP(codigo){
+  escuelaSelP = (escuelaSelP === codigo) ? "" : codigo;
+  pintarListaEscuelasPrueba();
+}
+function limpiarFiltrosPrueba(){
+  filtroTarjetaP="todas"; turnoSelP="TODOS"; fechaSelP=""; busquedaEscP=""; escuelaSelP="";
+  document.getElementById("buscarEscP").value="";
+  const sf=document.getElementById("selFechaP"); if(sf) sf.value="";
+  const st=document.getElementById("selTurnoP"); if(st) st.value="TODOS";
+  document.querySelectorAll("#vistaPrueba .tarjeta").forEach(c=>c.classList.remove("activa"));
+  document.getElementById("cardEscPrueba").classList.add("activa");
+  yaAjustadoP=false; procesarYPintarPrueba();
+}
+
+/* ---- Cambio de pestaña ---- */
+function activarVista(v){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("activa", t.dataset.v===v));
+  document.getElementById("vistaAsistencia").classList.toggle("activa", v==="asistencia");
+  document.getElementById("vistaPrueba").classList.toggle("activa", v==="prueba");
+  if(v==="prueba"){
+    initMapaPrueba();
+    yaAjustadoP=false;
+    procesarYPintarPrueba();
+    setTimeout(()=>{ mapaPrueba.invalidateSize(); pintarMapaPrueba(); }, 80);
+  }else{
+    setTimeout(()=>{ if(mapa) mapa.invalidateSize(); }, 80);
+  }
+}
+
 /* ================= AVISOS ================= */
 function mostrarAviso(m){ const a=document.getElementById("aviso"); a.textContent=m; a.style.display="block"; }
 function ocultarAviso(){ document.getElementById("aviso").style.display="none"; }
@@ -844,6 +1208,32 @@ document.querySelectorAll(".tarjeta").forEach(card=>{
   });
 });
 document.getElementById("autoRefresco").addEventListener("change", aplicarAutoRefresco);
+
+/* ---- Eventos vista Prueba ---- */
+document.querySelectorAll(".tab").forEach(t=>{
+  t.addEventListener("click", ()=>activarVista(t.dataset.v));
+});
+document.getElementById("selFechaP").addEventListener("change", ev=>{
+  fechaSelP = ev.target.value; yaAjustadoP=false; procesarYPintarPrueba();
+});
+document.getElementById("selTurnoP").addEventListener("change", ev=>{
+  turnoSelP = ev.target.value; yaAjustadoP=false; procesarYPintarPrueba();
+});
+document.getElementById("buscarEscP").addEventListener("input", ev=>{
+  busquedaEscP = ev.target.value.trim(); pintarMapaPrueba(); pintarListaEscuelasPrueba();
+});
+document.getElementById("btnLimpiarP").addEventListener("click", limpiarFiltrosPrueba);
+document.querySelectorAll("#vistaPrueba .tarjeta").forEach(card=>{
+  card.addEventListener("click",()=>{
+    const f = card.dataset.f;
+    if(!f) return;
+    filtroTarjetaP = (filtroTarjetaP===f) ? "todas" : f;
+    document.querySelectorAll("#vistaPrueba .tarjeta").forEach(c=>c.classList.remove("activa"));
+    if(filtroTarjetaP==="todas") document.getElementById("cardEscPrueba").classList.add("activa");
+    else card.classList.add("activa");
+    pintarMapaPrueba(); pintarListaEscuelasPrueba();
+  });
+});
 function aplicarAutoRefresco(){
   if(temporizador){ clearInterval(temporizador); temporizador=null; }
   const seg = parseInt(document.getElementById("autoRefresco").value,10);
