@@ -223,27 +223,31 @@
 </div>
 
 <div class="resumen">
+  <div class="tarjeta t-esperados info" id="cardEscEsperadas" title="Escuelas con estudiantes en el contexto actual (reportadas + pendientes)">
+    <div class="valor" id="numEscEsperadas">–</div>
+    <div class="etiqueta">Escuelas esperadas</div>
+  </div>
   <div class="tarjeta t-escuelas activa" id="cardEscuelas" data-f="todas">
     <div class="valor" id="numEscuelas">–</div>
     <div class="etiqueta">Escuelas reportadas</div>
   </div>
+  <div class="tarjeta t-pendientes" id="cardPendientes" data-f="pendientes">
+    <div class="valor" id="numPendientes">–</div>
+    <div class="etiqueta">Escuelas pendientes</div>
+  </div>
   <div class="tarjeta t-esperados info" id="cardEsperados">
     <div class="valor" id="numEsperados">–</div>
-    <div class="etiqueta">Total niños esperados</div>
+    <div class="etiqueta">Estudiantes esperados</div>
   </div>
   <div class="tarjeta t-asistentes" id="cardAsistentes" data-f="asistentes">
     <div class="valor" id="numAsistentes">–</div>
-    <div class="etiqueta">Niños asistentes</div>
+    <div class="etiqueta">Estudiantes presentes</div>
     <div class="porcentaje" id="pctAsistentes"></div>
   </div>
   <div class="tarjeta t-ausentes" id="cardAusentes" data-f="ausentes">
     <div class="valor" id="numAusentes">–</div>
-    <div class="etiqueta">Niños ausentes</div>
+    <div class="etiqueta">Estudiantes ausentes</div>
     <div class="porcentaje" id="pctAusentes"></div>
-  </div>
-  <div class="tarjeta t-pendientes" id="cardPendientes" data-f="pendientes">
-    <div class="valor" id="numPendientes">–</div>
-    <div class="etiqueta">Escuelas pendientes</div>
   </div>
 </div>
 
@@ -624,9 +628,10 @@ function procesarYPintar(){
 
 /* ================= RENDER ================= */
 function pintarResumen(){
-  let escReportadas=0, escPendientes=0, presentes=0, ausentes=0, esperados=0;
+  let escEsperadas=0, escReportadas=0, escPendientes=0, presentes=0, ausentes=0, esperados=0;
   for(const esc of escuelas){
     const st = estadoEsc[esc.codigo];
+    if(st.total>0)   escEsperadas++;   // escuelas con estudiantes en el contexto (= reportadas + pendientes)
     if(st.reporto)   escReportadas++;
     if(st.pendiente) escPendientes++;
     presentes += st.presentes;
@@ -635,6 +640,7 @@ function pintarResumen(){
   }
   const reportados = presentes + ausentes;   // base de la tasa real: niños con asistencia tomada
   const pct = n => reportados>0 ? Math.round(n/reportados*100) + "% de reportados" : "";
+  document.getElementById("numEscEsperadas").textContent = escEsperadas.toLocaleString("es-SV");
   document.getElementById("numEscuelas").textContent   = escReportadas.toLocaleString("es-SV");
   document.getElementById("numEsperados").textContent  = esperados.toLocaleString("es-SV");
   document.getElementById("numAsistentes").textContent = presentes.toLocaleString("es-SV");
